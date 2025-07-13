@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: microservices
+  labels:
+    app: api-gateway
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        version: v1
+    spec:
+      containers:
+      - name: api-gateway
+        image: microservices/api-gateway:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: GATEWAY_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: GATEWAY_PORT
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: HOST
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: LOG_LEVEL
+        - name: USER_SERVICE_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: USER_SERVICE_ADDRESS
+        - name: PRODUCT_SERVICE_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: PRODUCT_SERVICE_ADDRESS
+        - name: ORDER_SERVICE_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: ORDER_SERVICE_ADDRESS
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: microservices
+  labels:
+    app: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP 

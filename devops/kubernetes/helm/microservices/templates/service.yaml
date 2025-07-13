@@ -1,0 +1,25 @@
+{{- $services := list "userService" "productService" "orderService" "apiGateway" -}}
+{{- range $serviceName := $services }}
+{{- $service := index $.Values.services $serviceName }}
+{{- if $service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName | kebabcase }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "microservices.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName | kebabcase }}
+spec:
+  type: {{ $service.service.type }}
+  ports:
+    - port: {{ $service.service.port }}
+      targetPort: {{ if eq $serviceName "apiGateway" }}http{{ else }}grpc{{ end }}
+      protocol: TCP
+      name: {{ if eq $serviceName "apiGateway" }}http{{ else }}grpc{{ end }}
+  selector:
+    {{- include "microservices.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName | kebabcase }}
+{{- end }}
+{{- end }} 

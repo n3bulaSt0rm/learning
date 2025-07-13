@@ -1,0 +1,247 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [user-service, product-service, order-service, api-gateway]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Install dependencies
+      run: |
+        go mod download
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+    
+    - name: Generate protobuf
+      run: make proto
+    
+    - name: Run tests
+      run: go test -v -race -coverprofile=coverage.out ./cmd/${{ matrix.service }}/... || true
+    
+    - name: Run linter
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m ./cmd/${{ matrix.service }}/...
+    
+    - name: Security scan
+      uses: securecodewarrior/github-action-add-sarif@v1
+      with:
+        sarif-file: 'gosec-report.sarif'
+      continue-on-error: true
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        service: [user-service, product-service, order-service, api-gateway]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./deployments/Dockerfile
+        target: ${{ matrix.service }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        service: [user-service, product-service, order-service, api-gateway]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:${{ github.sha }}'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build, security-scan]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+    
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > ~/.kube/config
+    
+    - name: Deploy to staging
+      run: |
+        # Update image tags in staging manifests
+        sed -i 's|image: microservices/user-service:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-service:${{ github.sha }}|g' k8s/staging/user-service.yaml
+        sed -i 's|image: microservices/product-service:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/product-service:${{ github.sha }}|g' k8s/staging/product-service.yaml
+        sed -i 's|image: microservices/order-service:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/order-service:${{ github.sha }}|g' k8s/staging/order-service.yaml
+        sed -i 's|image: microservices/api-gateway:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api-gateway:${{ github.sha }}|g' k8s/staging/api-gateway.yaml
+        
+        # Apply manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/staging/
+        
+        # Wait for deployment
+        kubectl rollout status deployment/user-service -n microservices-staging --timeout=300s
+        kubectl rollout status deployment/product-service -n microservices-staging --timeout=300s
+        kubectl rollout status deployment/order-service -n microservices-staging --timeout=300s
+        kubectl rollout status deployment/api-gateway -n microservices-staging --timeout=300s
+    
+    - name: Run integration tests
+      run: |
+        # Wait for services to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment/api-gateway -n microservices-staging
+        
+        # Run integration tests
+        GATEWAY_URL=$(kubectl get ingress microservices-ingress-staging -n microservices-staging -o jsonpath='{.spec.rules[0].host}')
+        curl -f "http://$GATEWAY_URL/health" || exit 1
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+    
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
+    
+    - name: Deploy to production
+      run: |
+        # Update image tags in production manifests
+        sed -i 's|image: microservices/user-service:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-service:${{ github.sha }}|g' k8s/user-service.yaml
+        sed -i 's|image: microservices/product-service:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/product-service:${{ github.sha }}|g' k8s/product-service.yaml
+        sed -i 's|image: microservices/order-service:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/order-service:${{ github.sha }}|g' k8s/order-service.yaml
+        sed -i 's|image: microservices/api-gateway:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api-gateway:${{ github.sha }}|g' k8s/api-gateway.yaml
+        
+        # Apply manifests with rolling update
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/cert-manager.yaml
+        kubectl apply -f k8s/network-policy.yaml
+        kubectl apply -f k8s/user-service.yaml
+        kubectl apply -f k8s/product-service.yaml
+        kubectl apply -f k8s/order-service.yaml
+        kubectl apply -f k8s/api-gateway.yaml
+        kubectl apply -f k8s/ingress.yaml
+        kubectl apply -f k8s/hpa.yaml
+        
+        # Wait for deployment
+        kubectl rollout status deployment/user-service -n microservices --timeout=600s
+        kubectl rollout status deployment/product-service -n microservices --timeout=600s
+        kubectl rollout status deployment/order-service -n microservices --timeout=600s
+        kubectl rollout status deployment/api-gateway -n microservices --timeout=600s
+    
+    - name: Run smoke tests
+      run: |
+        # Wait for services to be ready
+        kubectl wait --for=condition=available --timeout=600s deployment/api-gateway -n microservices
+        
+        # Run smoke tests
+        GATEWAY_URL=$(kubectl get ingress microservices-ingress -n microservices -o jsonpath='{.spec.rules[0].host}')
+        curl -f "https://$GATEWAY_URL/health" || exit 1
+    
+    - name: Notify deployment
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: 'Production deployment successful! 🚀'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+    
+    - name: Notify failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: 'Production deployment failed! 🚨'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }} 

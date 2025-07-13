@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: microservices
+  labels:
+    app: product-service
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+        version: v1
+    spec:
+      containers:
+      - name: product-service
+        image: microservices/product-service:latest
+        ports:
+        - containerPort: 50052
+          name: grpc
+        env:
+        - name: PRODUCT_SERVICE_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: PRODUCT_SERVICE_PORT
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: HOST
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: microservices-config
+              key: LOG_LEVEL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          tcpSocket:
+            port: 50052
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 50052
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: microservices
+  labels:
+    app: product-service
+spec:
+  selector:
+    app: product-service
+  ports:
+  - name: grpc
+    port: 50052
+    targetPort: 50052
+  type: ClusterIP 

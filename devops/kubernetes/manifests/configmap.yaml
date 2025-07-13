@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: microservices-config
+  namespace: microservices
+data:
+  # General config
+  LOG_LEVEL: "info"
+  HOST: "0.0.0.0"
+  
+  # Service ports
+  USER_SERVICE_PORT: "50051"
+  PRODUCT_SERVICE_PORT: "50052"
+  ORDER_SERVICE_PORT: "50053"
+  GATEWAY_PORT: "8080"
+  
+  # Service addresses for internal communication
+  USER_SERVICE_ADDRESS: "user-service:50051"
+  PRODUCT_SERVICE_ADDRESS: "product-service:50052"
+  ORDER_SERVICE_ADDRESS: "order-service:50053" 

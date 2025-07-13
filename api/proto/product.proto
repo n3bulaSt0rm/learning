@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package product;
+
+option go_package = "learning/pkg/product/pb";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// Product service definition
+service ProductService {
+  // Create a new product
+  rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/products"
+      body: "*"
+    };
+  }
+  
+  // Get product by ID
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/products/{id}"
+    };
+  }
+  
+  // Update product
+  rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/products/{id}"
+      body: "*"
+    };
+  }
+  
+  // Delete product
+  rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/products/{id}"
+    };
+  }
+  
+  // List products
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/products"
+    };
+  }
+  
+  // Update product stock
+  rpc UpdateStock(UpdateStockRequest) returns (UpdateStockResponse);
+}
+
+// Product model
+message Product {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  int32 stock = 5;
+  string category = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// Request/Response messages
+message CreateProductRequest {
+  string name = 1;
+  string description = 2;
+  double price = 3;
+  int32 stock = 4;
+  string category = 5;
+}
+
+message CreateProductResponse {
+  Product product = 1;
+}
+
+message GetProductRequest {
+  string id = 1;
+}
+
+message GetProductResponse {
+  Product product = 1;
+}
+
+message UpdateProductRequest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  int32 stock = 5;
+  string category = 6;
+}
+
+message UpdateProductResponse {
+  Product product = 1;
+}
+
+message DeleteProductRequest {
+  string id = 1;
+}
+
+message DeleteProductResponse {
+  bool success = 1;
+}
+
+message ListProductsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string category = 3;
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message UpdateStockRequest {
+  string product_id = 1;
+  int32 quantity = 2; // positive to add, negative to reduce
+}
+
+message UpdateStockResponse {
+  bool success = 1;
+  int32 new_stock = 2;
+} 

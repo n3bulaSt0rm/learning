@@ -1,0 +1,29 @@
+# Copy this file to terraform.tfvars and modify values as needed
+
+# AWS Configuration
+aws_region = "us-west-2"
+
+# VPC Configuration
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
+
+# EKS Configuration
+kubernetes_version = "1.28"
+instance_types     = ["t3.medium", "t3.large"]
+
+# Security - Restrict access to your IP range
+public_access_cidrs = ["0.0.0.0/0"]  # Change this to your IP range for security
+
+# Fargate (optional for cost savings)
+enable_fargate = false
+
+# Microservices
+microservices = ["user-service", "product-service", "order-service", "api-gateway"]
+
+# Database Configuration
+db_username = "postgres"
+db_password = "your-secure-password-here"  # Change this to a secure password
+
+# Environment
+environment = "staging" 

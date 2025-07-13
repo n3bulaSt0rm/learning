@@ -1,0 +1,104 @@
+services:
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      target: user-service
+    container_name: user-service
+    ports:
+      - "50051:50051"
+    environment:
+      - USER_SERVICE_PORT=50051
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - microservices
+
+  # Product Service
+  product-service:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      target: product-service
+    container_name: product-service
+    ports:
+      - "50052:50052"
+    environment:
+      - PRODUCT_SERVICE_PORT=50052
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50052"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - microservices
+
+  # Order Service
+  order-service:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      target: order-service
+    container_name: order-service
+    ports:
+      - "50053:50053"
+    environment:
+      - ORDER_SERVICE_PORT=50053
+      - HOST=0.0.0.0
+      - USER_SERVICE_ADDRESS=user-service:50051
+      - PRODUCT_SERVICE_ADDRESS=product-service:50052
+      - LOG_LEVEL=info
+    depends_on:
+      - user-service
+      - product-service
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50053"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - microservices
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      target: api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - GATEWAY_PORT=8080
+      - HOST=0.0.0.0
+      - USER_SERVICE_ADDRESS=user-service:50051
+      - PRODUCT_SERVICE_ADDRESS=product-service:50052
+      - ORDER_SERVICE_ADDRESS=order-service:50053
+      - LOG_LEVEL=info
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - microservices
+
+networks:
+  microservices:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local 

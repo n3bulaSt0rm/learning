@@ -1,0 +1,118 @@
+{{- $services := list "userService" "productService" "orderService" "apiGateway" -}}
+{{- range $serviceName := $services }}
+{{- $service := index $.Values.services $serviceName }}
+{{- if $service.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName | kebabcase }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "microservices.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName | kebabcase }}
+spec:
+  replicas: {{ $service.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "microservices.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName | kebabcase }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ $service.service.port }}"
+        prometheus.io/path: "/metrics"
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "microservices.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName | kebabcase }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "microservices.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $serviceName | kebabcase }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          image: "{{ $.Values.image.repository }}/{{ $serviceName | kebabcase }}:{{ $service.image.tag | default $.Values.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: {{ if eq $serviceName "apiGateway" }}http{{ else }}grpc{{ end }}
+              containerPort: {{ $service.service.port }}
+              protocol: TCP
+          {{- if eq $serviceName "apiGateway" }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ $service.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ $service.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          {{- else }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ $service.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: {{ $service.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          {{- end }}
+          resources:
+            {{- toYaml $service.resources | nindent 12 }}
+          env:
+            - name: LOG_LEVEL
+              value: {{ $.Values.config.logLevel }}
+            - name: HOST
+              value: {{ $.Values.config.host }}
+            {{- if eq $serviceName "userService" }}
+            - name: USER_SERVICE_PORT
+              value: {{ $.Values.config.userServicePort | quote }}
+            {{- else if eq $serviceName "productService" }}
+            - name: PRODUCT_SERVICE_PORT
+              value: {{ $.Values.config.productServicePort | quote }}
+            {{- else if eq $serviceName "orderService" }}
+            - name: ORDER_SERVICE_PORT
+              value: {{ $.Values.config.orderServicePort | quote }}
+            - name: USER_SERVICE_ADDRESS
+              value: "user-service:{{ $.Values.config.userServicePort }}"
+            - name: PRODUCT_SERVICE_ADDRESS
+              value: "product-service:{{ $.Values.config.productServicePort }}"
+            {{- else if eq $serviceName "apiGateway" }}
+            - name: GATEWAY_PORT
+              value: {{ $.Values.config.gatewayPort | quote }}
+            - name: USER_SERVICE_ADDRESS
+              value: "user-service:{{ $.Values.config.userServicePort }}"
+            - name: PRODUCT_SERVICE_ADDRESS
+              value: "product-service:{{ $.Values.config.productServicePort }}"
+            - name: ORDER_SERVICE_ADDRESS
+              value: "order-service:{{ $.Values.config.orderServicePort }}"
+            {{- end }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }} 

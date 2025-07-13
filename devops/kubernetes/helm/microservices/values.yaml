@@ -1,0 +1,194 @@
+# Default values for microservices
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/microservices
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configurations
+services:
+  userService:
+    enabled: true
+    replicaCount: 2
+    image:
+      tag: "latest"
+    service:
+      type: ClusterIP
+      port: 50051
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  productService:
+    enabled: true
+    replicaCount: 2
+    image:
+      tag: "latest"
+    service:
+      type: ClusterIP
+      port: 50052
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  orderService:
+    enabled: true
+    replicaCount: 2
+    image:
+      tag: "latest"
+    service:
+      type: ClusterIP
+      port: 50053
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  apiGateway:
+    enabled: true
+    replicaCount: 3
+    image:
+      tag: "latest"
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: api.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: microservices-tls
+      hosts:
+        - api.yourdomain.com
+
+# Network policies
+networkPolicies:
+  enabled: true
+
+# Configuration
+config:
+  logLevel: "info"
+  host: "0.0.0.0"
+  userServicePort: "50051"
+  productServicePort: "50052"
+  orderServicePort: "50053"
+  gatewayPort: "8080"
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      path: /metrics
+  grafana:
+    enabled: true
+    dashboards:
+      enabled: true
+
+# Environment-specific overrides
+environments:
+  staging:
+    replicaCount: 1
+    ingress:
+      hosts:
+        - host: api-staging.yourdomain.com
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: microservices-staging-tls
+          hosts:
+            - api-staging.yourdomain.com
+  
+  production:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 256Mi 
