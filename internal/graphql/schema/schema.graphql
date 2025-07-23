@@ -1,0 +1,72 @@
+# Root schema definition
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+type Query {
+  # Health check
+  health: String!
+  
+  # Node interface implementation (Relay Global Object Identification) - TODO: Implement later
+  # node(id: ID!): Node
+  # nodes(ids: [ID!]!): [Node]!
+}
+
+type Mutation {
+  # Placeholder - actual mutations defined in domain schemas
+  _empty: String
+}
+
+type Subscription {
+  # Real-time updates - TODO: Implement later
+  # orderUpdated(userId: ID): Order!
+  # stockUpdated(productId: ID): Product!
+  _empty: String
+}
+
+# Common interfaces
+interface Node {
+  id: ID!
+}
+
+# Relay connection patterns
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# Common input types
+input PaginationInput {
+  first: Int
+  after: String
+  last: Int
+  before: String
+}
+
+# Common types for search and filtering
+input SearchInput {
+  query: String
+  filters: [FilterInput!]
+}
+
+input FilterInput {
+  field: String!
+  operator: FilterOperator!
+  value: String!
+}
+
+enum FilterOperator {
+  EQUALS
+  NOT_EQUALS
+  CONTAINS
+  STARTS_WITH
+  ENDS_WITH
+  GREATER_THAN
+  LESS_THAN
+  IN
+  NOT_IN
+} 

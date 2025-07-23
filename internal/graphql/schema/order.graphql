@@ -1,0 +1,114 @@
+# Order domain schema
+type Order {
+  id: ID!
+  user: User!
+  items: [OrderItem!]!
+  totalAmount: Float!
+  status: OrderStatus!
+  createdAt: String!
+  updatedAt: String!
+  
+  # Computed fields
+  itemCount: Int!
+  canBeCancelled: Boolean!
+}
+
+type OrderItem {
+  id: ID!
+  product: Product!
+  productName: String! # Snapshot at order time
+  productPrice: Float! # Snapshot at order time  
+  quantity: Int!
+  total: Float!
+}
+
+# OrderStatus moved to scalars.graphql
+
+# Order operations
+extend type Query {
+  order(id: ID!): Order
+  orders(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    userId: ID
+    status: OrderStatus
+    dateFrom: String
+    dateTo: String
+  ): OrderConnection!
+  
+  # Analytics - TODO: Implement later
+  # orderStats(period: StatsPeriod!): OrderStats! @auth(requires: ADMIN)
+}
+
+extend type Mutation {
+  createOrder(input: CreateOrderInput!): CreateOrderPayload!
+  updateOrderStatus(input: UpdateOrderStatusInput!): UpdateOrderStatusPayload!
+  cancelOrder(input: CancelOrderInput!): CancelOrderPayload!
+}
+
+# Input types
+input CreateOrderInput {
+  userId: ID!
+  items: [OrderItemInput!]!
+}
+
+input OrderItemInput {
+  productId: ID!
+  quantity: Int!
+}
+
+input UpdateOrderStatusInput {
+  orderId: ID!
+  status: OrderStatus!
+}
+
+input CancelOrderInput {
+  orderId: ID!
+  reason: String
+}
+
+# Payload types
+type CreateOrderPayload {
+  order: Order
+  errors: [OrderError!]!
+}
+
+type UpdateOrderStatusPayload {
+  order: Order
+  errors: [OrderError!]!
+}
+
+type CancelOrderPayload {
+  order: Order
+  errors: [OrderError!]!
+}
+
+# Connection types
+type OrderConnection {
+  edges: [OrderEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type OrderEdge {
+  node: Order!
+  cursor: String!
+}
+
+# Analytics types - TODO: Implement later
+# type OrderStats {
+#   period: StatsPeriod!
+#   totalOrders: Int!
+#   totalRevenue: Float!
+#   averageOrderValue: Float!
+#   statusBreakdown: [OrderStatusStat!]!
+# }
+
+# Error types
+type OrderError {
+  field: String
+  message: String!
+  code: ErrorCode!
+} 

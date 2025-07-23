@@ -12,6 +12,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"learning/internal/common"
+	graphqlserver "learning/internal/graphql"
+	"learning/internal/order"
+	"learning/internal/product"
+	"learning/internal/user"
 	orderpb "learning/pkg/order/pb"
 	productpb "learning/pkg/product/pb"
 	userpb "learning/pkg/user/pb"
@@ -58,14 +62,40 @@ func main() {
 	}
 	log.Printf("Registered Order Service proxy to %s", config.OrderServiceAddress)
 
-	// Create a main mux that handles both API and health endpoints
+	// Create a main mux that handles API, GraphQL and health endpoints
 	mainMux := http.NewServeMux()
 
 	// Add health check endpoint
 	mainMux.HandleFunc("/health", healthCheckHandler)
 
 	// Add gRPC-Gateway routes under /api/
-	mainMux.Handle("/", mux)
+	mainMux.Handle("/api/", mux)
+
+	// Setup GraphQL if enabled
+	if config.GraphQLEnabled {
+		// Create repositories (using in-memory for demo)
+		userRepo := user.NewInMemoryRepository()
+		productRepo := product.NewInMemoryRepository()
+		orderRepo := order.NewInMemoryRepository()
+
+		// Create GraphQL server
+		gqlConfig := &graphqlserver.Config{
+			PlaygroundEnabled:    config.GraphQLPlaygroundEnabled,
+			IntrospectionEnabled: true,
+		}
+		gqlServer := graphqlserver.NewServer(gqlConfig, userRepo, productRepo, orderRepo)
+
+		// Add GraphQL endpoints
+		mainMux.Handle("/graphql", gqlServer.Handler())
+		if config.GraphQLPlaygroundEnabled {
+			mainMux.Handle("/playground", gqlServer.PlaygroundHandler())
+		}
+
+		log.Printf("GraphQL endpoint available at: %s/graphql", config.GetHTTPAddress())
+		if config.GraphQLPlaygroundEnabled {
+			log.Printf("GraphQL Playground available at: %s/playground", config.GetHTTPAddress())
+		}
+	}
 
 	// Create HTTP server with middleware
 	server := &http.Server{
@@ -77,11 +107,19 @@ func main() {
 	}
 
 	log.Printf("API Gateway started on %s", config.GetHTTPAddress())
-	log.Printf("API endpoints available at:")
-	log.Printf("  Users: %s/api/v1/users", config.GetHTTPAddress())
-	log.Printf("  Products: %s/api/v1/products", config.GetHTTPAddress())
-	log.Printf("  Orders: %s/api/v1/orders", config.GetHTTPAddress())
+	log.Printf("Available endpoints:")
+	log.Printf("  REST API:")
+	log.Printf("    Users: %s/api/v1/users", config.GetHTTPAddress())
+	log.Printf("    Products: %s/api/v1/products", config.GetHTTPAddress())
+	log.Printf("    Orders: %s/api/v1/orders", config.GetHTTPAddress())
 	log.Printf("  Health: %s/health", config.GetHTTPAddress())
+	if config.GraphQLEnabled {
+		log.Printf("  GraphQL:")
+		log.Printf("    Endpoint: %s/graphql", config.GetHTTPAddress())
+		if config.GraphQLPlaygroundEnabled {
+			log.Printf("    Playground: %s/playground", config.GetHTTPAddress())
+		}
+	}
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start HTTP server: %v", err)

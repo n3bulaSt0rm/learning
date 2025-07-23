@@ -1,0 +1,97 @@
+# User domain schema
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  phone: String!
+  createdAt: String!
+  updatedAt: String!
+  
+  # Relationships
+  orders(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    status: OrderStatus
+  ): OrderConnection!
+}
+
+# User operations
+extend type Query {
+  user(id: ID!): User
+  users(
+    first: Int
+    after: String 
+    last: Int
+    before: String
+    search: String
+  ): UserConnection!
+}
+
+extend type Mutation {
+  createUser(input: CreateUserInput!): CreateUserPayload!
+  updateUser(input: UpdateUserInput!): UpdateUserPayload!
+  deleteUser(input: DeleteUserInput!): DeleteUserPayload!
+}
+
+# Input types
+input CreateUserInput {
+  name: String!
+  email: String!
+  phone: String!
+}
+
+input UpdateUserInput {
+  id: ID!
+  name: String
+  email: String  
+  phone: String
+}
+
+input DeleteUserInput {
+  id: ID!
+}
+
+# Payload types (best practice for mutations)
+type CreateUserPayload {
+  user: User
+  errors: [UserError!]!
+}
+
+type UpdateUserPayload {
+  user: User
+  errors: [UserError!]!
+}
+
+type DeleteUserPayload {
+  deletedUserId: ID
+  errors: [UserError!]!
+}
+
+# Connection types (Relay pattern)
+type UserConnection {
+  edges: [UserEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type UserEdge {
+  node: User!
+  cursor: String!
+}
+
+# Error types
+type UserError {
+  field: String
+  message: String!
+  code: ErrorCode!
+}
+
+enum ErrorCode {
+  VALIDATION_ERROR
+  NOT_FOUND
+  ALREADY_EXISTS
+  UNAUTHORIZED
+  INTERNAL_ERROR
+} 

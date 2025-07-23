@@ -22,6 +22,10 @@ type Config struct {
 
 	// Logging
 	LogLevel string
+
+	// GraphQL config
+	GraphQLEnabled           bool
+	GraphQLPlaygroundEnabled bool
 }
 
 // LoadConfig loads configuration from environment variables with defaults
@@ -65,6 +69,11 @@ func LoadOrderServiceConfig() *Config {
 func LoadGatewayConfig() *Config {
 	config := LoadConfig()
 	config.Port = getEnv("GATEWAY_PORT", "8080")
+
+	// GraphQL specific configs
+	config.GraphQLEnabled = getEnv("GRAPHQL_ENABLED", "true") == "true"
+	config.GraphQLPlaygroundEnabled = getEnv("GRAPHQL_PLAYGROUND_ENABLED", "true") == "true"
+
 	return config
 }
 

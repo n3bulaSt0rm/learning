@@ -1,0 +1,114 @@
+# Product domain schema
+type Product {
+  id: ID!
+  name: String!
+  description: String!
+  price: Float!
+  stock: Int!
+  category: String!
+  createdAt: String!
+  updatedAt: String!
+  
+  # Computed fields
+  isInStock: Boolean!
+  stockStatus: StockStatus!
+}
+
+# StockStatus moved to scalars.graphql
+
+# Product operations
+extend type Query {
+  product(id: ID!): Product
+  products(
+    first: Int
+    after: String
+    last: Int  
+    before: String
+    category: String
+    search: String
+    inStock: Boolean
+  ): ProductConnection!
+  
+  # Aggregations
+  productCategories: [ProductCategory!]!
+}
+
+extend type Mutation {
+  createProduct(input: CreateProductInput!): CreateProductPayload!
+  updateProduct(input: UpdateProductInput!): UpdateProductPayload!
+  deleteProduct(input: DeleteProductInput!): DeleteProductPayload!
+  updateProductStock(input: UpdateProductStockInput!): UpdateProductStockPayload!
+}
+
+# Input types
+input CreateProductInput {
+  name: String!
+  description: String!
+  price: Float!
+  stock: Int!
+  category: String!
+}
+
+input UpdateProductInput {
+  id: ID!
+  name: String
+  description: String
+  price: Float
+  stock: Int
+  category: String
+}
+
+input DeleteProductInput {
+  id: ID!
+}
+
+input UpdateProductStockInput {
+  productId: ID!
+  quantity: Int! # Can be negative to reduce stock
+}
+
+# Payload types
+type CreateProductPayload {
+  product: Product
+  errors: [ProductError!]!
+}
+
+type UpdateProductPayload {
+  product: Product
+  errors: [ProductError!]!
+}
+
+type DeleteProductPayload {
+  deletedProductId: ID
+  errors: [ProductError!]!
+}
+
+type UpdateProductStockPayload {
+  product: Product
+  errors: [ProductError!]!
+}
+
+# Connection types
+type ProductConnection {
+  edges: [ProductEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ProductEdge {
+  node: Product!
+  cursor: String!
+}
+
+# Aggregation types
+type ProductCategory {
+  name: String!
+  count: Int!
+}
+
+# Error types
+type ProductError {
+  field: String
+  message: String!
+  code: ErrorCode!
+} 

@@ -85,3 +85,27 @@ dev: proto
 	@make run-order &
 	@make run-gateway &
 	@wait 
+
+# GraphQL commands
+.PHONY: graphql-generate
+graphql-generate:
+	@echo "Generating GraphQL code..."
+	go run github.com/99designs/gqlgen generate
+
+.PHONY: graphql-init
+graphql-init:
+	@echo "Initializing GraphQL..."
+	mkdir -p internal/graphql/{schema,resolvers,models,generated}
+	$(MAKE) graphql-generate
+
+.PHONY: dev-graphql
+dev-graphql:
+	@echo "Starting GraphQL playground..."
+	@echo "Visit http://localhost:8080/graphql for GraphQL playground"
+	$(MAKE) run-gateway
+
+# DataLoader generation
+.PHONY: generate-dataloaders
+generate-dataloaders:
+	@echo "Generating DataLoaders..."
+	go generate ./internal/graphql/dataloaders/... 

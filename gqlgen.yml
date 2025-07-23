@@ -1,0 +1,42 @@
+# GraphQL schema location
+schema:
+  - "internal/graphql/schema/*.graphql"
+
+# Generated Go code output
+exec:
+  filename: internal/graphql/generated/generated.go
+  package: generated
+
+# GraphQL models output  
+model:
+  filename: internal/graphql/models/models_gen.go
+  package: models
+
+# Resolver implementation
+resolver:
+  layout: follow-schema
+  dir: internal/graphql/resolvers
+  package: resolvers
+  filename_template: "{name}.resolvers.go"
+
+# Custom scalar configurations
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Int32
+  # Use built-in String type for dates initially
+  
+  # Generate GraphQL models instead of mapping to domain models for now
+  # This allows us to have more flexibility in GraphQL schema
+  # User:
+  #   model: learning/internal/user.User
+  # Product:
+  #   model: learning/internal/product.Product
+  # Order:
+  #   model: learning/internal/order.Order
+
+# Skip generation for these types (use existing domain models)
+skip_mod_tidy: true 
